@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+dist/
+build/
+venv/
+__pycache__/
+*.egg-info/
+
+# Reports and artifacts
+*.sbom.json
+*.sbom.xml
+audit-report.md
+audit-findings.json
+*.log
+
+# Temporary files
+.DS_Store
+*.swp
+*.swo
+*~
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Runtime dependencies lockfiles (for testing)
+package-lock.json
+yarn.lock
+Pipfile.lock
+poetry.lock
+Cargo.lock
