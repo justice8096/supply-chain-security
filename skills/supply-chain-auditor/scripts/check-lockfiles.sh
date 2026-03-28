@@ -1,14 +1,23 @@
 #!/bin/bash
 # check-lockfiles.sh - Verify lockfile presence and integrity
 
-set -e
+set -euo pipefail
 
 PROJECT_PATH="${1:-.}"
 
-if [ ! -d "$PROJECT_PATH" ]; then
-    echo "Error: Project path '$PROJECT_PATH' not found"
+# CWE-426: Validate path - reject traversal attempts
+if [[ "$PROJECT_PATH" == *".."* ]]; then
+    echo "Error: Path traversal detected" >&2
     exit 1
 fi
+
+if [ ! -d "$PROJECT_PATH" ]; then
+    echo "Error: Project path '$PROJECT_PATH' not found" >&2
+    exit 1
+fi
+
+# Resolve to canonical path
+PROJECT_PATH="$(cd "$PROJECT_PATH" 2>/dev/null && pwd)"
 
 check_npm() {
     local project="$1"

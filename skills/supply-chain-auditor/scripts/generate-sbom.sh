@@ -2,15 +2,24 @@
 # generate-sbom.sh - Generate CycloneDX SBOM from dependency files
 # Supports: npm, yarn, pnpm, pip, poetry, cargo, go mod, maven, gradle
 
-set -e
+set -euo pipefail
 
 PROJECT_PATH="${1:-.}"
 OUTPUT_FILE="${2:-sbom.json}"
 
-if [ ! -d "$PROJECT_PATH" ]; then
-    echo "Error: Project path '$PROJECT_PATH' not found"
+# CWE-426: Validate path - reject traversal attempts
+if [[ "$PROJECT_PATH" == *".."* ]]; then
+    echo "Error: Path traversal detected" >&2
     exit 1
 fi
+
+if [ ! -d "$PROJECT_PATH" ]; then
+    echo "Error: Project path '$PROJECT_PATH' not found" >&2
+    exit 1
+fi
+
+# Resolve to canonical path
+PROJECT_PATH="$(cd "$PROJECT_PATH" 2>/dev/null && pwd)"
 
 detect_package_manager() {
     local pm_files=()
@@ -40,29 +49,40 @@ generate_npm_sbom() {
 
     echo "Detecting npm dependencies from $project/package.json..."
 
-    local name=$(jq -r '.name // "unknown"' "$project/package.json" 2>/dev/null || echo "unknown")
-    local version=$(jq -r '.version // "0.0.0"' "$project/package.json" 2>/dev/null || echo "0.0.0")
+    local name version timestamp serial_num
+    name=$(jq -r '.name // "unknown"' "$project/package.json" 2>/dev/null || echo "unknown")
+    version=$(jq -r '.version // "0.0.0"' "$project/package.json" 2>/dev/null || echo "0.0.0")
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    serial_num=$(uuidgen 2>/dev/null || echo 'unknown')
 
-    cat > "$output" <<EOF
+    # CWE-94: Use jq to safely construct JSON with proper escaping
+    jq -n \
+      --arg name "$name" \
+      --arg version "$version" \
+      --arg ts "$timestamp" \
+      --arg serial "$serial_num" \
+      '{
+        bomFormat: "CycloneDX",
+        specVersion: "1.4",
+        serialNumber: ("urn:uuid:" + $serial),
+        version: 1,
+        metadata: {
+          timestamp: $ts,
+          tools: [{vendor: "supply-chain-auditor", name: "generate-sbom.sh", version: "1.0.0"}],
+          component: {type: "application", name: $name, version: $version}
+        },
+        components: [],
+        dependencies: []
+      }' > "$output" 2>/dev/null || cat > "$output" <<EOF
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:$(uuidgen 2>/dev/null || echo 'unknown')",
+  "serialNumber": "urn:uuid:${serial_num}",
   "version": 1,
   "metadata": {
-    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "tools": [
-      {
-        "vendor": "supply-chain-auditor",
-        "name": "generate-sbom.sh",
-        "version": "1.0.0"
-      }
-    ],
-    "component": {
-      "type": "application",
-      "name": "$name",
-      "version": "$version"
-    }
+    "timestamp": "${timestamp}",
+    "tools": [{"vendor": "supply-chain-auditor", "name": "generate-sbom.sh", "version": "1.0.0"}],
+    "component": {"type": "application", "name": "${name}", "version": "${version}"}
   },
   "components": [],
   "dependencies": []
