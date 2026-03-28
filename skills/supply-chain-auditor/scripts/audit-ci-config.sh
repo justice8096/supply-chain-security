@@ -1,15 +1,24 @@
 #!/bin/bash
 # audit-ci-config.sh - Audit CI/CD configuration for supply chain risks
 
-set -e
+set -euo pipefail
 
 PROJECT_PATH="${1:-.}"
 PLATFORM="${2:-auto}"
 
-if [ ! -d "$PROJECT_PATH" ]; then
-    echo "Error: Project path '$PROJECT_PATH' not found"
+# CWE-426: Validate path - reject traversal attempts
+if [[ "$PROJECT_PATH" == *".."* ]]; then
+    echo "Error: Path traversal detected" >&2
     exit 1
 fi
+
+if [ ! -d "$PROJECT_PATH" ]; then
+    echo "Error: Project path '$PROJECT_PATH' not found" >&2
+    exit 1
+fi
+
+# Resolve to canonical path
+PROJECT_PATH="$(cd "$PROJECT_PATH" 2>/dev/null && pwd)"
 
 FINDINGS_FILE="/tmp/ci-audit-findings.json"
 : > "$FINDINGS_FILE"  # Clear file
@@ -43,8 +52,8 @@ audit_github_actions() {
             echo "{\"severity\": \"high\", \"finding\": \"missing-action-version\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
         fi
 
-        # Check for hardcoded secrets
-        if grep -E '(GITHUB_TOKEN|API_KEY|password|secret|key)\s*=\s*['\''\"A-Za-z0-9]' "$workflow_file"; then
+        # CWE-78: Add -- option terminator to grep patterns
+        if grep -E -- '(GITHUB_TOKEN|API_KEY|password|secret|key)\s*=\s*['\''\"A-Za-z0-9]' "$workflow_file"; then
             echo "    CRITICAL: Potential hardcoded secret detected"
             echo "{\"severity\": \"critical\", \"finding\": \"hardcoded-secret\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
         fi
@@ -85,8 +94,8 @@ audit_gitlab_ci() {
 
     echo "Auditing GitLab CI configuration..."
 
-    # Check for hardcoded secrets
-    if grep -E '(token|key|secret|password):\s*['\''\"A-Za-z0-9]' "$ci_file"; then
+    # CWE-78: Add -- option terminator to grep patterns
+    if grep -E -- '(token|key|secret|password):\s*['\''\"A-Za-z0-9]' "$ci_file"; then
         echo "  CRITICAL: Hardcoded secret detected in .gitlab-ci.yml"
         echo "{\"severity\": \"critical\", \"finding\": \"hardcoded-secret\", \"file\": \".gitlab-ci.yml\"}" >> "$FINDINGS_FILE"
     fi
@@ -121,8 +130,8 @@ audit_jenkins() {
     for jfile in "${jenkins_files[@]}"; do
         echo "  Checking: $(basename "$jfile")"
 
-        # Check for credentials in plaintext
-        if grep -E "(password|token|key)\s*=" "$jfile" | grep -v 'credentials'; then
+        # CWE-78: Add -- option terminator to grep patterns
+        if grep -E -- "(password|token|key)\s*=" "$jfile" | grep -v -- 'credentials'; then
             echo "    CRITICAL: Credentials possibly hardcoded"
             echo "{\"severity\": \"critical\", \"finding\": \"hardcoded-credentials\", \"file\": \"$(basename "$jfile")\"}" >> "$FINDINGS_FILE"
         fi
