@@ -18,13 +18,20 @@ class AuditReport:
     @staticmethod
     def load_findings(filepath: str) -> Dict[str, Any]:
         """Load audit findings from JSON."""
+        # CWE-703: Proper error handling - exit on failure instead of returning error dict
         try:
             with open(filepath, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+            if not isinstance(data, dict):
+                print(f"Error: Findings file must contain a JSON object, got {type(data).__name__}", file=sys.stderr)
+                sys.exit(1)
+            return data
         except FileNotFoundError:
-            return {"error": "Findings file not found"}
-        except json.JSONDecodeError:
-            return {"error": "Invalid JSON in findings file"}
+            print(f"Error: Findings file not found: {filepath}", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in findings file: {e}", file=sys.stderr)
+            sys.exit(1)
 
     def generate_markdown(self) -> str:
         """Generate markdown report."""
