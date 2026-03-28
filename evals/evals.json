@@ -1,0 +1,389 @@
+{
+  "evals": [
+    {
+      "id": "nodejs-eval-1",
+      "name": "Node.js Project with Supply Chain Risks",
+      "description": "Node.js project with outdated dependencies, missing lockfile, and unpinned GitHub Actions",
+      "category": "node-supply-chain",
+      "difficulty": "medium",
+      "input": {
+        "project_type": "nodejs",
+        "files": {
+          "package.json": {
+            "name": "vulnerable-app",
+            "version": "1.0.0",
+            "dependencies": {
+              "express": "3.0.0",
+              "lodash": "2.4.1",
+              "request": "2.51.0",
+              "handlebars": "1.0.0"
+            }
+          },
+          ".github/workflows/build.yml": {
+            "name": "Build",
+            "on": ["push"],
+            "jobs": {
+              "build": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@v1"
+                  },
+                  {
+                    "uses": "actions/setup-node@v3"
+                  },
+                  {
+                    "run": "npm install && npm test"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "analysis_scope": [
+          "dependency_analysis",
+          "ci_cd_audit",
+          "lockfile_check"
+        ]
+      },
+      "expected_findings": [
+        {
+          "severity": "critical",
+          "category": "dependency",
+          "title": "Missing lockfile",
+          "description": "No package-lock.json found; dependencies not deterministically pinned",
+          "framework_mappings": ["NIST PS.3.1", "SLSA L1"]
+        },
+        {
+          "severity": "critical",
+          "category": "dependencies",
+          "title": "Outdated express dependency (v3.0.0)",
+          "description": "Express 3.0.0 released in 2013; multiple known vulnerabilities (CVE-2014-6271, etc.)",
+          "cve_examples": ["CVE-2014-6271"],
+          "framework_mappings": ["NIST PS.2.1", "CISA Practice 1"]
+        },
+        {
+          "severity": "high",
+          "category": "ci_cd",
+          "title": "Unpinned GitHub Actions",
+          "description": "Actions use @v1, @v3 instead of commit hash; vulnerable to action hijacking",
+          "affected_actions": ["actions/checkout@v1", "actions/setup-node@v3"],
+          "recommendation": "Pin to commit: actions/checkout@a1b2c3d4e5f6",
+          "framework_mappings": ["NIST PS.3.2", "OpenSSF Scorecard"]
+        },
+        {
+          "severity": "high",
+          "category": "dependency",
+          "title": "Unmaintained dependencies",
+          "description": "lodash 2.4.1 (released 2013, 10+ years old); request 2.51.0 (deprecated library)",
+          "affected_components": ["lodash", "request"],
+          "framework_mappings": ["NIST PS.2.2"]
+        }
+      ],
+      "expected_slsa_level": 0,
+      "expected_slsa_gap": [
+        "No provenance available",
+        "Unpinned GitHub Actions",
+        "No lockfile for deterministic builds",
+        "Missing artifact signing"
+      ]
+    },
+    {
+      "id": "python-eval-2",
+      "name": "Python Project with License Violations and Container Issues",
+      "description": "Python project with GPL dependency in MIT project, missing SBOM, and Docker image using :latest tag",
+      "category": "python-container-supply-chain",
+      "difficulty": "medium",
+      "input": {
+        "project_type": "python",
+        "files": {
+          "setup.py": {
+            "name": "myproject",
+            "version": "1.0.0",
+            "license": "MIT",
+            "install_requires": [
+              "flask==2.0.0",
+              "gpl-library==1.0.0",
+              "requests==2.25.0"
+            ]
+          },
+          "requirements.txt": [
+            "flask==2.0.0",
+            "gpl-library==1.0.0",
+            "requests==2.25.0"
+          ],
+          "Dockerfile": {
+            "FROM": "python:3.9",
+            "RUN": "pip install -r requirements.txt",
+            "CMD": "[\"python\", \"app.py\"]"
+          },
+          ".gitlab-ci.yml": {
+            "stages": ["build", "deploy"],
+            "build": {
+              "image": "python:3.9",
+              "script": ["pip install -r requirements.txt", "pytest"]
+            },
+            "deploy": {
+              "image": "docker:latest",
+              "script": ["docker build -t myapp:latest .", "docker push myapp:latest"]
+            }
+          }
+        },
+        "analysis_scope": [
+          "dependency_analysis",
+          "license_audit",
+          "container_security",
+          "ci_cd_audit"
+        ]
+      },
+      "expected_findings": [
+        {
+          "severity": "critical",
+          "category": "license",
+          "title": "GPL dependency in MIT project",
+          "description": "gpl-library (GPL-3.0) is incompatible with MIT license; creates copyleft obligation",
+          "affected_component": "gpl-library==1.0.0",
+          "license_conflict": "GPL-3.0 (copyleft) + MIT (permissive) = license violation",
+          "recommendation": "Replace with MIT/Apache-2.0 licensed alternative or dual-license project",
+          "framework_mappings": ["EU AI Act Article 25", "NIST PS.1.2"]
+        },
+        {
+          "severity": "critical",
+          "category": "container",
+          "title": "Base image uses :latest tag",
+          "description": "python:3.9 and docker:latest are not reproducible; violates build integrity",
+          "affected_images": ["python:3.9", "docker:latest"],
+          "recommendation": "Pin to digest: python@sha256:abcd1234...",
+          "framework_mappings": ["SLSA L2", "NIST PS.3.1"]
+        },
+        {
+          "severity": "high",
+          "category": "sbom",
+          "title": "Missing SBOM",
+          "description": "No CycloneDX or SPDX SBOM generated; lacks component transparency for supply chain",
+          "recommendation": "Generate SBOM during CI/CD with syft or similar tool",
+          "framework_mappings": ["CISA Practice 3", "EU AI Act Article 25"]
+        },
+        {
+          "severity": "high",
+          "category": "ci_cd",
+          "title": "Docker image built with :latest tag",
+          "description": "CI/CD pushes image as :latest (not versioned); prevents reproducibility and rollback",
+          "file": ".gitlab-ci.yml",
+          "affected_step": "docker push myapp:latest",
+          "framework_mappings": ["NIST PS.3.2", "SLSA L1"]
+        },
+        {
+          "severity": "medium",
+          "category": "dependency",
+          "title": "Outdated Python dependencies",
+          "description": "flask==2.0.0 (released 2021); requests==2.25.0 (released 2020); missing security patches",
+          "affected_components": ["flask", "requests"],
+          "framework_mappings": ["NIST PS.2.2"]
+        },
+        {
+          "severity": "medium",
+          "category": "container",
+          "title": "No lockfile for Python dependencies in Dockerfile",
+          "description": "Dockerfile uses requirements.txt without pinned versions in some cases",
+          "recommendation": "Use pip-compile or poetry.lock for deterministic container builds",
+          "framework_mappings": ["SLSA L3"]
+        }
+      ],
+      "expected_slsa_level": 1,
+      "expected_framework_gaps": {
+        "NIST 800-218A": ["PS.3.1 (build source)", "PS.3.2 (build integrity)"],
+        "EU AI Act Article 25": ["Technical documentation (SBOM)", "License governance"],
+        "OpenSSF": ["License compliance", "Signed releases"]
+      }
+    },
+    {
+      "id": "monorepo-eval-3",
+      "name": "Multi-Language Monorepo with Mixed Security Issues",
+      "description": "Monorepo with Node.js + Rust + Go, mixed license concerns, CI exposes secrets in logs, SLSA gaps",
+      "category": "complex-monorepo",
+      "difficulty": "hard",
+      "input": {
+        "project_type": "monorepo",
+        "languages": ["nodejs", "rust", "go"],
+        "files": {
+          "package.json": {
+            "name": "monorepo-root",
+            "workspaces": ["packages/*"],
+            "dependencies": {
+              "leftpad": "0.0.1"
+            }
+          },
+          "packages/node-app/package.json": {
+            "name": "node-app",
+            "dependencies": {
+              "react": "15.0.0",
+              "webpack": "1.13.0"
+            }
+          },
+          "Cargo.toml": {
+            "name": "rust-service",
+            "version": "0.1.0",
+            "dependencies": {
+              "tokio": {
+                "version": "0.1",
+                "features": ["full"]
+              }
+            }
+          },
+          "go.mod": {
+            "module": "github.com/example/monorepo",
+            "require": {
+              "github.com/sirupsen/logrus": "v1.0.0"
+            }
+          },
+          ".github/workflows/ci.yml": {
+            "name": "CI/CD",
+            "on": ["push", "pull_request"],
+            "jobs": {
+              "build": {
+                "runs-on": "ubuntu-latest",
+                "env": {
+                  "NPM_TOKEN": "${{ secrets.NPM_TOKEN }}",
+                  "CARGO_TOKEN": "${{ secrets.CARGO_TOKEN }}"
+                },
+                "steps": [
+                  {
+                    "run": "echo 'Building packages...'"
+                  },
+                  {
+                    "run": "npm run build"
+                  },
+                  {
+                    "run": "cargo build"
+                  },
+                  {
+                    "run": "echo 'Build log: ${{ env.NPM_TOKEN }}'"
+                  },
+                  {
+                    "run": "go build ./..."
+                  }
+                ]
+              },
+              "publish": {
+                "needs": "build",
+                "if": "github.ref == 'refs/heads/main'",
+                "steps": [
+                  {
+                    "uses": "npm/npm-registry-bump@latest"
+                  },
+                  {
+                    "run": "cargo publish --token $CARGO_TOKEN"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "analysis_scope": [
+          "dependency_analysis",
+          "license_audit",
+          "ci_cd_audit",
+          "secret_scanning",
+          "monorepo_complexity"
+        ]
+      },
+      "expected_findings": [
+        {
+          "severity": "critical",
+          "category": "secrets",
+          "title": "Secrets exposed in build logs",
+          "description": "Environment variables containing NPM_TOKEN and CARGO_TOKEN printed to logs via echo statement",
+          "file": ".github/workflows/ci.yml",
+          "affected_line": "echo 'Build log: ${{ env.NPM_TOKEN }}'",
+          "impact": "Secrets leaked to CI/CD logs visible to all repository collaborators",
+          "recommendation": "Remove echo statement; use GitHub secret masking",
+          "framework_mappings": ["NIST PS.3.2", "CISA Practice 2", "Supply-Chain-Threats: Secrets in Logs"]
+        },
+        {
+          "severity": "critical",
+          "category": "dependency",
+          "title": "Typosquatting risk: leftpad",
+          "description": "leftpad==0.0.1 is a typosquatting package (left-pad is legitimate); extremely high risk",
+          "affected_component": "leftpad (npm)",
+          "legitimate_package": "left-pad",
+          "cve_history": "Known malicious versions distributed",
+          "recommendation": "Replace with legitimate 'left-pad' package",
+          "framework_mappings": ["Supply-Chain-Threats: Typosquatting", "NIST PS.2.1"]
+        },
+        {
+          "severity": "high",
+          "category": "ci_cd",
+          "title": "Unpinned third-party action: npm/npm-registry-bump",
+          "description": "Action 'npm/npm-registry-bump@latest' not pinned to commit; vulnerable to hijacking",
+          "affected_action": "npm/npm-registry-bump@latest",
+          "recommendation": "Pin to specific commit hash; verify action source",
+          "framework_mappings": ["NIST PS.3.2", "OpenSSF Scorecard: Pinned Dependencies"]
+        },
+        {
+          "severity": "high",
+          "category": "license",
+          "title": "Mixed license compliance issues",
+          "description": "monorepo contains multiple languages with incompatible licenses; unclear license inheritance",
+          "affected_packages": ["react (MIT)", "webpack (MIT)", "tokio (MIT)", "logrus (MIT)"],
+          "recommendation": "Create LICENSE compatibility matrix; document license strategy per workspace",
+          "framework_mappings": ["EU AI Act Article 25", "NIST PS.1.1"]
+        },
+        {
+          "severity": "high",
+          "category": "dependency",
+          "title": "Severely outdated JavaScript dependencies",
+          "description": "react 15.0.0 (released 2016, 8+ years); webpack 1.13.0 (released 2016)",
+          "affected_components": ["react@15.0.0", "webpack@1.13.0"],
+          "known_vulnerabilities": ["XSS in React", "Build vulnerability in webpack"],
+          "framework_mappings": ["NIST PS.2.1", "NIST PS.2.2"]
+        },
+        {
+          "severity": "high",
+          "category": "dependency",
+          "title": "Missing lockfiles for Go module",
+          "description": "go.mod present but no go.sum commits visible; transitive deps not pinned",
+          "affected_system": "Go",
+          "recommendation": "Commit go.sum to repository for build reproducibility",
+          "framework_mappings": ["SLSA L1", "NIST PS.3.1"]
+        },
+        {
+          "severity": "medium",
+          "category": "monorepo",
+          "title": "Inconsistent dependency management across workspaces",
+          "description": "Different package managers and strategies per language; difficult to track supply chain",
+          "workspaces": ["packages/node-app (npm)", "Cargo.toml (cargo)", "go.mod (go)"],
+          "recommendation": "Standardize SBOM generation and vulnerability scanning across all languages",
+          "framework_mappings": ["CISA Practice 3", "EU AI Act Article 25"]
+        },
+        {
+          "severity": "medium",
+          "category": "ci_cd",
+          "title": "Publish step runs on main branch without review gates",
+          "description": "Automated publish to registries on any main branch push; no required review",
+          "affected_step": "publish job",
+          "recommendation": "Require manual approval for publish steps; implement signed releases",
+          "framework_mappings": ["SLSA L2/L3", "OpenSSF Scorecard: Code Review"]
+        },
+        {
+          "severity": "medium",
+          "category": "dependency",
+          "title": "Old versions of common libraries with known CVEs",
+          "description": "tokio 0.1, logrus 1.0.0 deprecated/old versions with known security issues",
+          "affected_components": ["tokio@0.1", "logrus@v1.0.0"],
+          "framework_mappings": ["NIST PS.2.1", "CISA Practice 1"]
+        }
+      ],
+      "expected_slsa_level": 0,
+      "expected_critical_count": 2,
+      "expected_high_count": 6,
+      "expected_framework_gaps": {
+        "NIST 800-218A": ["PO.2.1 (Risk Management)", "PS.2.1 (Vulnerable Dependencies)", "PS.3.1", "PS.3.2"],
+        "CISA": ["Practice 1 (VCS)", "Practice 2 (Secure Build)", "Practice 3 (SBOM)"],
+        "EU AI Act": ["Technical Documentation", "Governance"],
+        "OpenSSF": ["Code Review", "Pinned Dependencies", "License"],
+        "SLSA": ["L1 (Provenance)", "L2 (Signed Provenance)"]
+      }
+    }
+  ]
+}
