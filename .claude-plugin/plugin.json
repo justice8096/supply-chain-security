@@ -1,0 +1,19 @@
+{
+  "name": "Supply Chain Security Auditor",
+  "description": "Comprehensive supply chain security auditing for software projects",
+  "version": "1.0.0",
+  "author": "Justice",
+  "license": "MIT",
+  "skills": [
+    "supply-chain-auditor"
+  ],
+  "commands": [],
+  "resources": {
+    "references": [
+      "sbom-guide.md",
+      "slsa-framework.md",
+      "supply-chain-threats.md",
+      "framework-mapping.md"
+    ]
+  }
+}
