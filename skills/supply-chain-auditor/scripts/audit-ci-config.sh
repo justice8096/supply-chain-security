@@ -37,7 +37,8 @@ audit_github_actions() {
     for workflow_file in "$workflow_dir"/*.yml "$workflow_dir"/*.yaml; do
         [ -e "$workflow_file" ] || continue
 
-        local workflow_name=$(basename "$workflow_file")
+        local workflow_name
+        workflow_name=$(basename "$workflow_file")
         echo "  Checking: $workflow_name"
 
         # Check for unpinned actions
@@ -68,6 +69,7 @@ audit_github_actions() {
         fi
 
         # Check for secrets exposure in logs
+        # shellcheck disable=SC2016  # ${{ is GitHub Actions expression syntax, not a shell variable
         if grep -q 'echo.*\${{' "$workflow_file"; then
             echo "    WARN: Environment variables printed to logs (potential secret exposure)"
         fi
@@ -207,9 +209,12 @@ generate_summary() {
         return 0
     fi
 
-    local critical=$(grep -c '"critical"' "$FINDINGS_FILE" || true)
-    local high=$(grep -c '"high"' "$FINDINGS_FILE" || true)
-    local medium=$(grep -c '"medium"' "$FINDINGS_FILE" || true)
+    local critical
+    critical=$(grep -c '"critical"' "$FINDINGS_FILE" || true)
+    local high
+    high=$(grep -c '"high"' "$FINDINGS_FILE" || true)
+    local medium
+    medium=$(grep -c '"medium"' "$FINDINGS_FILE" || true)
 
     echo "Total Findings: $total_findings"
     echo "  Critical: $critical"

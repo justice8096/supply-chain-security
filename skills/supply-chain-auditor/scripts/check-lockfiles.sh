@@ -181,7 +181,8 @@ verify_lockfile_integrity() {
     fi
 
     if [ -f "$project/go.sum" ] && [ -f "$project/go.mod" ]; then
-        local sum_lines=$(wc -l < "$project/go.sum")
+        local sum_lines
+        sum_lines=$(wc -l < "$project/go.sum")
         if [ "$sum_lines" -lt 1 ]; then
             echo "  WARN: go.sum is empty"
         else
