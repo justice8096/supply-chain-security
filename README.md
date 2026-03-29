@@ -13,9 +13,9 @@ A comprehensive Claude Code skill for auditing software projects against supply 
 
 ## Installation
 
-1. Copy the `supply-chain-security/` directory to your Claude Code skills folder
-2. Reference the skill in your `.claude-plugin/plugin.json`
-3. Load the skill in Claude Code or use the web interface
+```bash
+git clone git@github.com:justice8096/supply-chain-security.git ~/.claude/plugins/supply-chain-security
+```
 
 ## Usage
 
@@ -27,6 +27,29 @@ Trigger the skill by mentioning:
 - "container security", "image scan"
 
 Or share a dependency file (package.json, requirements.txt, Cargo.toml, go.mod) with security questions.
+
+## Audit Flow
+
+The five audit dimensions converge into a single structured report:
+
+```mermaid
+flowchart TD
+    Input([Repository / Manifest / CI Config / Dockerfile])
+
+    Input --> D1[1. Dependency Analysis\ncheck-lockfiles.sh\nCVE · License · Maintenance]
+    Input --> D2[2. CI/CD Pipeline Security\naudit-ci-config.sh\nSecrets · Permissions · Pinning]
+    Input --> D3[3. SBOM Generation\ngenerate-sbom.sh\nCycloneDX 1.4 · SPDX · VEX]
+    Input --> D4[4. SLSA Compliance\nL0–L4 Assessment\nGap Analysis]
+    Input --> D5[5. Container / Runtime\nBase Image · Layers\nSigning · Dockerfile]
+
+    D1 --> Report
+    D2 --> Report
+    D3 --> Report
+    D4 --> Report
+    D5 --> Report
+
+    Report([generate-report.py\nRisk Matrix · SBOM · Roadmap\nFramework Mapping Table])
+```
 
 ## Project Structure
 

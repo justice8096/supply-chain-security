@@ -1,262 +1,265 @@
-# Supply Chain Security Auditor Skill
+---
+name: supply-chain-security
+description: >
+  This skill should be used when the user asks to audit dependencies for vulnerabilities,
+  check if their dependencies are safe, generate a software bill of materials (SBOM),
+  assess SLSA compliance, audit CI/CD pipeline configuration for supply chain risks,
+  scan container images for supply chain threats, check license compliance, detect
+  hardcoded secrets in CI configuration, or map findings to NIST SP 800-218A, EU AI Act,
+  OpenSSF Scorecard, CISA secure development controls, ISO 42001, ENISA 2025, or SLSA v1.0.
+  Trigger phrases include: "supply chain", "SBOM", "dependency audit", "are my dependencies
+  safe", "license check", "SLSA", "software bill of materials", "check my package.json",
+  "vulnerability scan", "is this library safe", "dependency risk", "container security",
+  "image scan", "supply chain risk", "software provenance".
+---
 
-**Author**: Justice
-**Version**: 1.0.0
-**Trigger Keywords**: supply chain, SBOM, dependency audit, are my dependencies safe, license check, SLSA, software bill of materials, check my package.json, vulnerability scan, is this library safe, dependency risk, container security, image scan, supply chain risk, software provenance
+# Supply Chain Security Auditor
 
-## Overview
+Audit software projects across five dimensions: dependency analysis, CI/CD pipeline security,
+SBOM generation, SLSA compliance assessment, and container/runtime supply chain analysis.
+All findings map to NIST SP 800-218A, EU AI Act Article 25, OpenSSF Scorecard, CISA secure
+development controls, ISO 42001, ENISA 2025, and SLSA v1.0.
 
-The Supply Chain Security Auditor skill helps teams identify and mitigate supply chain security risks across five critical dimensions: dependency inventory and vulnerability analysis, CI/CD pipeline security, software bill of materials (SBOM) generation, SLSA compliance assessment, and runtime container security.
+---
 
-Findings map to compliance frameworks including NIST SP 800-218A, EU AI Act Article 25, OpenSSF Scorecard, CISA secure development controls, ISO 42001, ENISA 2025, and SLSA v1.0.
+## Audit Workflow
 
-## Audit Capabilities
+Execute audits in this order to produce a complete supply chain security assessment:
 
-### 1. Dependency Analysis
+1. **Intake** — Accept a package manifest, lockfile, CI config, Dockerfile, or repository URL.
+2. **Detection** — Identify package manager, build system, and container setup.
+3. **Parallel Analysis** — Run dependency, CI/CD, and container audits concurrently.
+4. **SBOM Generation** — Produce CycloneDX 1.4 or SPDX document with VEX statements.
+5. **SLSA Assessment** — Determine current level (L0–L4) and enumerate gaps.
+6. **Report** — Deliver executive summary, risk matrix, remediation roadmap, and framework table.
+7. **Prioritization** — Address critical/high findings first, then quick wins.
 
-Analyze all direct and transitive dependencies for security, maintenance, and legal risks.
+---
 
-**Scope**:
-- Package manager detection (npm, yarn, pnpm, pip, poetry, cargo, go mod, maven, gradle)
-- Direct vs transitive dependency inventory
-- Version pinning analysis (exact vs floating ranges)
-- Known vulnerability scanning against NVD/CVE databases
-- License inventory and GPL contamination detection
-- License compatibility matrix (MIT + AGPL = risk)
-- Maintenance status: last update date, commit frequency, open issues/PRs count
-- Bus factor assessment (contributor concentration)
-- Typosquatting risk (similar package names in registries)
-- Abandoned/deprecated package detection
-- Supply chain poisoning patterns (sudden version changes, account compromise)
+## Dimension 1: Dependency Analysis
 
-**Outputs**:
-- Dependency tree with version constraints
-- CVE list with CVSS scores and remediation status
-- License compliance report
-- Maintenance health dashboard
+### What to analyze
 
-### 2. Build Pipeline Security (CI/CD)
+- Detect package manager from manifest files: `package.json` / lockfile (npm, yarn, pnpm),
+  `requirements.txt` / `poetry.lock` (pip/poetry), `Cargo.toml` / `Cargo.lock` (cargo),
+  `go.mod` / `go.sum` (go mod), `pom.xml` (maven), `build.gradle` (gradle).
+- Build the full dependency tree distinguishing direct vs transitive dependencies.
+- Flag floating version constraints (`^`, `~`, `>=`) versus exact pins.
+- Check each dependency against NVD/CVE databases; record CVSS scores.
+- Inventory SPDX license identifiers; flag GPL contamination in non-GPL projects;
+  evaluate license compatibility (e.g., MIT + AGPL = risk).
+- Assess maintenance health: last release date, commit frequency, open issue count,
+  contributor count (bus factor).
+- Detect typosquatting risk via name-similarity matching against known registry packages.
+- Identify abandoned or deprecated packages and account-compromise patterns
+  (sudden unexpected version bumps, new maintainer with no history).
 
-Audit CI/CD configurations (GitHub Actions, GitLab CI, Jenkins) for common vulnerabilities.
+### Script
 
-**Scope**:
-- Third-party action/plugin trust assessment
-  - Pinned vs unpinned actions (`uses: user/action@ref` vs `uses: user/action`)
-  - Official vs community actions
-  - Action repository health (stars, last update, vulnerability history)
-- Secret management audit
-  - Hardcoded secrets detection (API keys, tokens in YAML)
-  - Vault/OIDC adoption vs environment variables
-  - Secret logging/exposure in build logs
-- Build reproducibility assessment
-  - Docker layer caching strategy
-  - Deterministic dependency resolution
-  - Build artifact versioning
-- Permissions analysis
-  - GITHUB_TOKEN scope (read-only vs write)
-  - Container registry push permissions
-  - Secrets access (wildcard * vs explicit refs)
-- Artifact signing and provenance
-  - Sigstore/cosign integration
-  - SLSA provenance generation
-  - Binary publication with signatures
+Use `scripts/check-lockfiles.sh <project-path>` to verify lockfile presence and integrity
+and detect manifest/lockfile mismatches.
 
-**Supported Platforms**:
-- GitHub Actions (.github/workflows/*.yml)
-- GitLab CI (.gitlab-ci.yml)
-- Jenkins (Jenkinsfile, pipeline configuration)
+### Outputs
 
-**Outputs**:
-- Risk matrix (critical, high, medium, low)
-- Remediation roadmap
-- SLSA level baseline
+| Output | Contents |
+|---|---|
+| Dependency tree | Version constraints, direct vs transitive |
+| CVE list | CVSS score, affected versions, remediation status |
+| License report | SPDX identifiers, compatibility issues |
+| Maintenance dashboard | Last update, bus factor, abandonment signals |
 
-### 3. Software Bill of Materials (SBOM)
+### Common critical findings
 
-Generate standardized component inventories for software transparency and vulnerability tracking.
+- No lockfile present → non-deterministic builds.
+- GPL dependency in a proprietary or MIT-licensed project → potential license violation.
+- Transitive dependency with known CVE (CVSS ≥ 7.0).
+- Unmaintained dependency (>1 year without release).
 
-**Formats**:
-- **CycloneDX**: JSON/XML format for component and dependency metadata
-  - Component type (library, framework, application, container, OS)
-  - License SPDX identifier
-  - Component version and purl (package URL)
-  - Known vulnerabilities and VEX statements
-- **SPDX**: Human-readable JSON/YAML format with license expressions
-  - File-level license metadata
-  - Creator and generated timestamp
-  - Relationship graph (contains, depends_on)
+---
 
-**Features**:
-- VEX (Vulnerability Exploitability eXchange) statements
-  - Vulnerability status: affected, unaffected, unknown
-  - Justification for unaffected status
-  - Impact assessment (component exploitable in context?)
-- Transitive dependency flattening
-- License expression parsing (MIT OR Apache-2.0)
-- Component metadata enrichment (source repository, download URL)
+## Dimension 2: CI/CD Pipeline Security
 
-**Generation Methods**:
-- package.json/package-lock.json -> npm-based SBOM
-- requirements.txt/Poetry.lock -> Python SBOM
-- Cargo.toml/Cargo.lock -> Rust SBOM
-- go.mod/go.sum -> Go SBOM
-- pom.xml/settings.xml -> Maven SBOM
+### What to analyze
 
-### 4. SLSA Compliance Assessment
+**Third-party action/plugin trust:**
+- Flag actions pinned to a mutable ref (`uses: org/action@main`) versus an immutable
+  commit SHA (`uses: org/action@abc1234`).
+- Assess official vs community actions; check action repository health.
 
-Determine current SLSA (Supply chain Levels for Software Artifacts) maturity and path to higher levels.
+**Secret management:**
+- Detect hardcoded secrets (API keys, tokens, passwords) in YAML pipeline configs.
+- Evaluate Vault/OIDC adoption versus plain environment variables.
+- Check for secret values echoed in build log steps.
 
-**SLSA Levels** (v1.0):
-- **L0**: No requirements; baseline
-- **L1**: Provenance available; version control; build recipe available
-- **L2**: Provenance signed; no repository modification during build; build logs retained
-- **L3**: Build script isolation; immutable version control; retention of source and build logs
-- **L4**: Provenance hermetically sealed; all dependencies pinned; reproducible builds; cryptographic identity binding
+**Permissions:**
+- Evaluate `GITHUB_TOKEN` scope; flag write-all or missing `permissions:` blocks.
+- Check container registry push permissions and wildcard secret access.
 
-**Assessment Includes**:
-- Current level determination based on build practices
-- Gap analysis: specific controls needed for next level
-- Provenance verification (Sigstore OIDC integration)
-- Build reproducibility testing
-- Source isolation audit
+**Build reproducibility:**
+- Assess Docker layer caching strategy, deterministic dependency resolution,
+  and artifact versioning.
 
-### 5. Runtime Supply Chain
+**Artifact signing and provenance:**
+- Check for Sigstore/cosign integration and SLSA provenance generation.
 
-Audit container images and OCI artifacts for supply chain risks.
+### Script
 
-**Container Analysis**:
-- Base image vulnerability scanning
-- Base image age and end-of-life status
-- Layer inspection (component inventory)
-- Image signing verification (cosign, notation)
-- Registry trust (Notary, content addressable)
-- Known malware patterns (using YARA/Trivy)
+Use `scripts/audit-ci-config.sh <project-path> [platform]` where platform is one of
+`github`, `gitlab`, or `jenkins`. The script parses:
+- GitHub Actions: `.github/workflows/*.yml`
+- GitLab CI: `.gitlab-ci.yml`
+- Jenkins: `Jenkinsfile`
 
-**Scope**:
-- Dockerfile and image build best practices
-- Multi-stage build assessment
-- Base image pinning (digest vs tag)
-- Image tag semantics (:latest anti-pattern)
-- Distroless/minimal image adoption
+### Outputs
 
-## Reference Materials
+- Risk matrix (critical / high / medium / low) per finding.
+- Remediation roadmap sorted by severity.
+- SLSA level baseline derived from pipeline practices.
 
-- **sbom-guide.md**: SBOM generation, CycloneDX vs SPDX comparison
-- **slsa-framework.md**: SLSA v1.0 levels, requirements, implementation guide
-- **supply-chain-threats.md**: MITRE ATLAS attacks, dependency confusion, typosquatting, account compromise
-- **framework-mapping.md**: Findings mapped to NIST 800-218A, EU AI Act, OpenSSF, CISA, ISO 42001, ENISA, SLSA
+---
 
-## Framework Mapping
+## Dimension 3: SBOM Generation
 
-All findings are categorized by compliance framework:
+Generate a standardized component inventory for vulnerability tracking and software transparency.
 
-**NIST SP 800-218A (SSDF)**:
-- PO (Prepare Organization)
-- PS (Protect Software)
-- PO.1.1: Organization document governance
-- PS.2.1: Vulnerable dependencies tracked
-- PS.3.1: Build from known good source
-- PS.3.2: Parameterized build with traceability
+### Formats
 
-**EU AI Act Article 25**: Technical documentation, risk management, transparency logs
+**CycloneDX 1.4** (JSON or XML):
+- Component type: library, framework, application, container, OS.
+- License SPDX identifier.
+- Component version and purl (package URL).
+- Known vulnerabilities and VEX statements.
 
-**OpenSSF Scorecard**: Security practices scoring (20 metrics)
+**SPDX** (JSON or YAML):
+- File-level license metadata.
+- Creator and generated timestamp.
+- Relationship graph: `CONTAINS`, `DEPENDS_ON`.
 
-**CISA Secure Software Development**: 8 critical controls for secure development
+### VEX statements
 
-**ISO 42001**: AI management system, design controls, risk assessment
+For each known vulnerability, record:
+- Status: `affected` / `not_affected` / `under_investigation`.
+- Justification for `not_affected` (e.g., `vulnerable_code_not_in_execute_path`).
+- Impact assessment: is the vulnerable code path reachable in this deployment?
 
-**ENISA 2025**: Supply chain risk assessment, vendor security, incident response
+### Script
 
-**SLSA v1.0**: Provenance, source integrity, build integrity, packaging integrity
+Use `scripts/generate-sbom.sh <project-path> [output-file.json]` to produce a
+CycloneDX JSON SBOM from:
 
-## Typical Audit Workflow
+| Manifest | Ecosystem |
+|---|---|
+| `package.json` / `package-lock.json` | npm |
+| `requirements.txt` / `poetry.lock` | Python |
+| `Cargo.toml` / `Cargo.lock` | Rust |
+| `go.mod` / `go.sum` | Go |
+| `pom.xml` / `settings.xml` | Maven |
 
-1. **Intake**: Provide package manifest or GitHub/GitLab repository URL
-2. **Detection**: Identify package manager, build system, container setup
-3. **Analysis**: Run dependency, CI/CD, and container audits in parallel
-4. **SBOM Generation**: Create CycloneDX SBOM with VEX statements
-5. **Assessment**: Determine SLSA level, framework compliance gaps
-6. **Report**: Executive summary, risk matrix, remediation roadmap, framework mapping
-7. **Prioritization**: High/critical findings first, quick wins second
+See `references/sbom-guide.md` for full format details and CycloneDX vs SPDX comparison.
 
-## Scripts
+---
 
-### generate-sbom.sh
-Generates CycloneDX JSON SBOM from dependency files (package.json, requirements.txt, Cargo.toml, go.mod).
+## Dimension 4: SLSA Compliance Assessment
 
-Usage: `./generate-sbom.sh <project-path> [output-file.json]`
+Determine the current SLSA v1.0 maturity level and produce a gap analysis.
 
-### check-lockfiles.sh
-Verifies lockfile presence and integrity, detects mismatches with manifest files.
+### Level definitions
 
-Usage: `./check-lockfiles.sh <project-path>`
+| Level | Requirements |
+|---|---|
+| L0 | No requirements; baseline (unevaluated) |
+| L1 | Provenance available; version control; build recipe recorded |
+| L2 | Provenance signed; no repository modification during build; build logs retained |
+| L3 | Build script isolation; immutable version control; source and build log retention |
+| L4 | Hermetically sealed provenance; all dependencies pinned; reproducible builds; cryptographic identity binding |
 
-### audit-ci-config.sh
-Parses GitHub Actions, GitLab CI, or Jenkinsfile for unpinned actions, hardcoded secrets, excessive permissions.
+### Assessment steps
 
-Usage: `./audit-ci-config.sh <project-path> [platform]`
+1. Determine the current level from observed build practices.
+2. Enumerate gaps: list the specific controls required to reach the next level.
+3. Verify Sigstore OIDC integration for provenance signing.
+4. Test build reproducibility where feasible.
+5. Audit source isolation (no modification of source during build).
 
-### generate-report.py
-Transforms audit findings JSON into markdown report with risk matrix, SLSA assessment, framework compliance table.
+See `references/slsa-framework.md` for detailed requirements per level and an
+implementation guide.
 
-Usage: `python generate-report.py findings.json --output report.md`
+---
 
-## Common Findings
+## Dimension 5: Container and Runtime Supply Chain
 
-**Critical**:
-- Hardcoded secrets in CI configuration
-- Unpinned GitHub Actions (security risk)
-- GPL dependency in proprietary/MIT project (license violation)
-- Base image :latest tag in Dockerfile (reproducibility risk)
-- No lockfile (non-deterministic builds)
+### What to analyze
 
-**High**:
-- Transitive dependency with known CVE (CVSS 7.0+)
-- Build runs with excessive permissions (full token write access)
-- Unmaintained dependencies (>1 year without updates)
-- Missing SBOM/provenance
+**Base image:**
+- Scan for known CVEs in the base image layers.
+- Check base image age and end-of-life status.
+- Flag `:latest` tag anti-pattern; require digest-pinned references.
+- Recommend distroless or minimal base images.
 
-**Medium**:
-- Floating version constraints (^1.0.0)
-- No artifact signing
-- Container image from untrusted registry
-- Bus factor assessment (single maintainer)
+**Layer inspection:**
+- Inventory components per layer; detect unexpected binaries or package additions.
 
-**Low**:
-- Non-standard license (less common)
-- Older base image (but actively maintained)
-- Missing VEX statements
+**Image signing:**
+- Verify cosign or notation signatures.
+- Assess Notary v2 / content-addressable registry configuration.
 
-## Output Formats
+**Dockerfile best practices:**
+- Multi-stage build adoption.
+- Non-root user enforcement.
+- `COPY --chown` vs post-copy `chmod` patterns.
 
-- **Executive Summary**: Risk overview, top 3 findings, SLSA level, compliance status
-- **Risk Matrix**: Severity vs likelihood, affected components
-- **SBOM**: CycloneDX JSON with VEX statements
-- **Roadmap**: Prioritized remediations with estimated effort
-- **Framework Mapping Table**: Finding -> NIST 800-218A + EU AI Act + OpenSSF + CISA + ISO 42001 + ENISA
-- **SLSA Path**: Current level + gap analysis to next level
+---
 
-## Limitations
+## Report Generation
 
-- Accuracy depends on publicly available vulnerability databases (NVD, GitHub Advisory)
-- Transitive dependency tracking limited to available lockfiles
-- SLSA assessment is baseline; detailed provenance verification requires artifact access
-- Container scanning requires image registry access or local image availability
-- Typosquatting detection limited to registry name similarity; manual review recommended
+Use `scripts/generate-report.py findings.json --output report.md` to transform a
+structured findings JSON file into a complete markdown report containing:
 
-## Privacy & Security
+- **Executive summary**: risk overview, top 3 findings, SLSA level, compliance status.
+- **Risk matrix**: severity × likelihood grid with affected components.
+- **SBOM**: CycloneDX JSON with VEX statements.
+- **Remediation roadmap**: prioritized actions with estimated effort.
+- **Framework mapping table**: finding → NIST 800-218A + EU AI Act + OpenSSF + CISA +
+  ISO 42001 + ENISA control identifiers.
+- **SLSA path**: current level + specific gaps to the next level.
 
-- All analysis performed locally on provided files
-- No sensitive data transmitted to external services unless explicitly configured
-- Vulnerability data sourced from public NVD/CVE databases
-- No dependency on proprietary vulnerability feeds (configurable)
+---
 
-## Future Enhancements
+## Framework Mapping Summary
 
-- Automated remediation suggestions with PR generation
-- Real-time monitoring and periodic rescans
-- Integration with Sigstore PKI for provenance verification
-- SLSA provenance statement validation
-- Custom policy as code (Rego/CEL-based)
-- Supply chain risk heat mapping across organizations
+All findings are tagged to one or more of the following controls.
+See `references/framework-mapping.md` for the full mapping table.
+
+| Framework | Key Controls |
+|---|---|
+| NIST SP 800-218A (SSDF) | PO.1.1, PS.2.1, PS.3.1, PS.3.2 |
+| EU AI Act Article 25 | Technical documentation, risk management, transparency logs |
+| OpenSSF Scorecard | 20 security practice metrics |
+| CISA Secure Software Development | 8 critical controls |
+| ISO 42001 | Design controls, risk assessment, AI management system |
+| ENISA 2025 | Supply chain risk, vendor security, incident response |
+| SLSA v1.0 | Provenance, source integrity, build integrity, packaging integrity |
+
+---
+
+## Reference Files
+
+| File | Contents |
+|---|---|
+| `references/sbom-guide.md` | SBOM generation guide; CycloneDX vs SPDX comparison; VEX statement authoring |
+| `references/slsa-framework.md` | SLSA v1.0 level requirements; implementation guide; provenance verification |
+| `references/supply-chain-threats.md` | MITRE ATT&CK attack patterns; dependency confusion; typosquatting; account compromise |
+| `references/framework-mapping.md` | Finding-to-control mapping across all six compliance frameworks |
+
+---
+
+## Known Limitations
+
+- CVE accuracy depends on publicly available NVD and GitHub Advisory databases.
+- Transitive dependency tracking requires a lockfile; without one, analysis is partial.
+- SLSA assessment is a baseline; full provenance verification requires access to the
+  signed provenance artifact (see `references/slsa-framework.md`).
+- Container scanning requires local image availability or authenticated registry access.
+- Typosquatting detection uses name-similarity only; manual review is recommended for
+  high-risk packages.
+- No sensitive project data is transmitted to external services unless explicitly configured.
