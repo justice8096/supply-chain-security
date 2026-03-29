@@ -1,334 +1,157 @@
-# SAST/DAST Security Scan Report (POST-FIX RE-AUDIT)
-**Supply Chain Security Auditor Skill**
-
-**Scan Date**: 2026-03-28
-**Scan Type**: Static Application Security Testing (SAST) + Dynamic Application Security Testing (DAST) Assessment
-**Audit Phase**: POST-REMEDIATION (Cycle 2)
-**Scope**: All source files (SKILL.md, Python scripts, Shell scripts, reference documents)
+# SAST/DAST Scan Report
+**Project**: supply-chain-security (Supply Chain Security Auditor Skill)
+**Date**: 2026-03-29
+**Commit**: 471a381 — style: fix flake8 violations
+**Branch**: master
+**Audit Type**: POST-FIX Re-audit (verifying HIGH resolution)
+**Prior Audit**: CONDITIONAL PASS — 2 HIGH, 4 MEDIUM, 2 LOW, 1 INFO
 
 ---
 
 ## Executive Summary
 
-The Supply Chain Security Auditor skill has been **SUCCESSFULLY REMEDIATED** with all identified security weaknesses addressed. The codebase now demonstrates **EXCELLENT security practices** with **ZERO CRITICAL and HIGH severity findings**, and substantial improvements in MEDIUM and LOW categories.
+All 2 HIGH and all 4 MEDIUM findings from the prior audit have been successfully remediated. The codebase is now clean of critical and high-severity vulnerabilities. Two low-severity and one informational finding remain as accepted residual risk.
 
-### BEFORE vs AFTER Comparison
+**Overall Result: PASS**
 
-| Category | BEFORE | AFTER | Change | Status |
-|----------|--------|-------|--------|--------|
-| CRITICAL | 0 | 0 | ➡️ No change | PASS |
-| HIGH | 0 | 0 | ➡️ No change | PASS |
-| MEDIUM | 2 | 0 | ✅ -100% | RESOLVED |
-| LOW | 3 | 0 | ✅ -100% | RESOLVED |
-| INFO | 2 | 2 | ➡️ No change | PASS |
-| **Security Score** | **8.2/10** | **9.4/10** | ✅ +1.2 points | **EXCELLENT** |
+### Before / After Delta
+
+| Severity | Prior | Current | Delta |
+|----------|-------|---------|-------|
+| CRITICAL | 0 | 0 | — |
+| HIGH | 2 | 0 | -2 RESOLVED |
+| MEDIUM | 4 | 0 | -4 RESOLVED |
+| LOW | 2 | 2 | — (accepted) |
+| INFO | 1 | 1 | — (known gap) |
+| **Total** | **9** | **3** | **-6** |
 
 ---
 
-## Detailed Findings - Remediation Status
+## Resolved Findings
 
-### MEDIUM Severity Findings (RESOLVED: 2/2)
+### [RESOLVED] H1 — Unpinned GitHub Actions (CWE-829)
+**File**: `.github/workflows/lint.yml`
+**Prior State**: All three actions were pinned only to mutable version tags (`@v4`, `@2.0.0`, `@v5`), allowing tag re-pointing to deliver compromised code into the pipeline without notice.
+**Fix Applied** (commit `10812c3`): All actions are now SHA-pinned to immutable commit hashes:
+- `actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4`
+- `ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0`
+- `actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5`
 
-#### 1. ✅ RESOLVED: Potential Command Injection via Grep Patterns
-**CWE**: CWE-78 (Improper Neutralization of Special Elements)
-**File**: `audit-ci-config.sh`
-**Severity**: MEDIUM (was 5.5) → **RESOLVED**
+**Verification**: No `uses: .*@v[0-9]` references remain in any workflow file.
 
-**Original Issue**:
-Multiple grep patterns used extended regex without explicit option terminators:
+---
+
+### [RESOLVED] H2 — Missing Least-Privilege Permissions (CWE-269)
+**File**: `.github/workflows/lint.yml`
+**Prior State**: No `permissions` block present; GITHUB_TOKEN defaulted to broad read/write access across all repository scopes, enabling potential privilege escalation if a step was compromised.
+**Fix Applied** (commit `10812c3`):
+```yaml
+permissions:
+  contents: read
+```
+The token is now restricted to the minimum scope required for checkout. All other capabilities are implicitly denied.
+
+**Verification**: `permissions: contents: read` confirmed present at workflow top level.
+
+---
+
+### [RESOLVED] M1 — Command Injection via Heredoc JSON in SBOM Generator (CWE-78)
+**File**: `skills/supply-chain-auditor/scripts/generate-sbom.sh`
+**Prior State**: `generate_python_sbom`, `generate_rust_sbom`, and `generate_go_sbom` constructed JSON output via shell heredoc with unquoted variable interpolation (`${name}`, `${version}`). A crafted filename or metadata value containing shell metacharacters or JSON special characters could corrupt the SBOM output or inject commands.
+**Fix Applied** (commit `10812c3`): All three generators now use `jq -n --arg name "$name" --arg ts "$timestamp"` (and `--arg version` where applicable) to pass values through jq's safe escaping layer before writing JSON.
+
+**Verification**: `jq -n` and `--arg` patterns confirmed in all three generators (lines ~121–135, ~155–167, ~183–196).
+
+---
+
+### [RESOLVED] M2 — Unescaped Workflow Name in JSON Finding Records (CWE-78)
+**File**: `skills/supply-chain-auditor/scripts/audit-ci-config.sh`
+**Prior State**: All JSON finding records in `audit_github_actions()` were written with bare `echo '{"severity": "...", "file": "'"$workflow_name"'"}' >> "$FINDINGS_FILE"`. A workflow filename containing double-quotes, backslashes, or JSON special characters would produce malformed JSON or enable injection.
+**Fix Applied** (commit `10812c3`): All finding writes now use `jq -n --arg file "$workflow_name" '{...}'` ensuring proper JSON escaping regardless of the filename value.
+
+**Verification**: No bare `echo '{"severity"...}' >> "$FINDINGS_FILE"` patterns remain in the GitHub Actions auditor loop.
+
+---
+
+### [RESOLVED] M3 — Wrong Permissions Detection Regex (CWE-697)
+**File**: `skills/supply-chain-auditor/scripts/audit-ci-config.sh`
+**Prior State**: Excessive-permissions check used the pattern `write: all` which never matches GitHub Actions' actual syntax. Real `write-all` permissions grants were silently missed, creating a false sense of security.
+**Fix Applied** (commit `10812c3`): Pattern corrected to:
 ```bash
-# BEFORE (vulnerable)
-if grep -E '(GITHUB_TOKEN|API_KEY|password|secret|key)\s*=\s*['\''\"A-Za-z0-9]' "$workflow_file"; then
+grep -qE 'write-all$|permissions:\s+write-all'
 ```
+This matches both the inline (`permissions: write-all`) and block (`permissions:\n  ...\nwrite-all`) forms.
 
-**Remediation Applied**:
-- Added `--` option terminator to ALL grep -E calls (lines 56, 98, 134)
-- Prevents shell interpretation of regex as additional options
-- Maintains functionality while eliminating attack vector
-
-**Code After Fix** (Lines 56, 98, 134):
-```bash
-# AFTER (secure)
-if grep -E -- '(GITHUB_TOKEN|API_KEY|password|secret|key)\s*=\s*['\''\"A-Za-z0-9]' "$workflow_file"; then
-```
-
-**Verification**: ✅ PASS - grep patterns now safely isolated with explicit option terminator
+**Verification**: Updated grep pattern confirmed in `audit_github_actions()`.
 
 ---
 
-#### 2. ✅ RESOLVED: Input Validation on Project Path Parameter
-**CWE**: CWE-426 (Untrusted Search Path)
-**Files**: `check-lockfiles.sh`, `generate-sbom.sh`, `audit-ci-config.sh`
-**Severity**: MEDIUM (was 4.3) → **RESOLVED**
+### [RESOLVED] M4 — `wc -l` Whitespace Portability Bug (CWE-20)
+**File**: `skills/supply-chain-auditor/scripts/audit-ci-config.sh`
+**Prior State**: `wc -l "$FINDINGS_FILE"` outputs `"       3 filename"` on macOS (leading whitespace + filename), causing `[ "$total_findings" -eq 0 ]` to fail with a bash arithmetic syntax error. On macOS the findings count was effectively unchecked, masking all findings silently.
+**Fix Applied** (commit `10812c3`): Replaced with `grep -c '' "$FINDINGS_FILE"` which returns a plain integer on all POSIX platforms (Linux, macOS, BSD).
 
-**Original Issue**:
-Path arguments were validated for directory existence but vulnerable to path traversal:
-```bash
-# BEFORE (vulnerable)
-PROJECT_PATH="${1:-.}"
-if [ ! -d "$PROJECT_PATH" ]; then
-    echo "Error: Project path '$PROJECT_PATH' not found"
-    exit 1
-fi
-```
-
-**Remediation Applied** (Lines 9-21 in all three scripts):
-- Explicit rejection of path traversal patterns (`..`)
-- Canonical path resolution using `cd && pwd`
-- Validates directory existence before processing
-
-**Code After Fix**:
-```bash
-# AFTER (secure)
-if [[ "$PROJECT_PATH" == *".."* ]]; then
-    echo "Error: Path traversal detected" >&2
-    exit 1
-fi
-
-if [ ! -d "$PROJECT_PATH" ]; then
-    echo "Error: Project path '$PROJECT_PATH' not found" >&2
-    exit 1
-fi
-
-PROJECT_PATH="$(cd "$PROJECT_PATH" 2>/dev/null && pwd)"
-```
-
-**Security Impact**: Eliminates symlink attacks, directory traversal, and path manipulation vectors
-
-**Verification**: ✅ PASS - All three scripts now implement comprehensive path validation
+**Verification**: `grep -c '' "$FINDINGS_FILE"` confirmed in `generate_summary()`.
 
 ---
 
-### LOW Severity Findings (RESOLVED: 3/3)
+### [RESOLVED] L1 (Prior Audit) — Lockfile Entries in .gitignore (CWE-494)
+**File**: `.gitignore`
+**Prior State**: Lockfile patterns were present in `.gitignore`, preventing `package-lock.json` and similar files from being committed. This undermined reproducible builds and SBOM integrity.
+**Fix Applied**: Lockfile entries removed from `.gitignore`.
 
-#### 3. ✅ RESOLVED: ReDoS Pattern Risk in Grep Extended Regex
-**CWE**: CWE-1333 (Inefficient Regular Expression Complexity)
-**File**: `audit-ci-config.sh`
-**Severity**: LOW (was 3.5) → **MITIGATED**
-
-**Resolution Strategy**:
-- Combined with CWE-78 fix: `--` option terminator prevents regex as option injection
-- Reduced attack surface by preventing uncontrolled regex evaluation
-- Patterns remain optimized for practical use (no backtracking observed on typical configs)
-
-**Status**: ✅ Mitigated through CWE-78 remediation and defensive `--` usage
+**Verification**: Confirmed resolved per commit history.
 
 ---
 
-#### 4. ✅ RESOLVED: Shell Variable Quoting in String Concatenation
-**CWE**: CWE-94 (Improper Control of Generation of Code)
-**File**: `generate-sbom.sh`
-**Severity**: LOW (was 2.8) → **RESOLVED**
-
-**Original Issue**:
-JSON was constructed via heredoc with unescaped variables from package.json:
-```bash
-# BEFORE (vulnerable)
-local name=$(jq -r '.name // "unknown"' "$project/package.json" 2>/dev/null || echo "unknown")
-# ... embedded in heredoc without escaping
-"name": "$name",
-```
-
-**Remediation Applied** (Lines 59-90):
-- Primary mechanism: `jq -n --arg` for safe JSON construction with proper escaping
-- All variables passed via `--arg` flags to jq
-- Fallback heredoc uses escaped variables: `${variable}` only
-
-**Code After Fix**:
-```bash
-# AFTER (secure - jq approach)
-jq -n \
-  --arg name "$name" \
-  --arg version "$version" \
-  '{
-    bomFormat: "CycloneDX",
-    serialNumber: ("urn:uuid:" + $serial),
-    ...
-  }' > "$output" 2>/dev/null || cat > "$output" <<'EOF'
-{
-  "serialNumber": "urn:uuid:${serial_num}",
-  ...
-}
-EOF
-```
-
-**Security Impact**: jq handles all JSON escaping; heredoc fallback uses single-quoted delimiter to prevent variable expansion
-
-**Verification**: ✅ PASS - JSON construction now provably safe against injection
+### [RESOLVED] Code Quality — flake8 Violations in generate-report.py
+**File**: `skills/supply-chain-auditor/scripts/generate-report.py`
+**Fix Applied** (commit `471a381`): Unused import removed, blank line formatting corrected, spurious f-strings without interpolation converted to plain strings. CI python-lint step now passes cleanly.
 
 ---
 
-#### 5. ✅ RESOLVED: Missing Error Handling in Python JSON Processing
-**CWE**: CWE-703 (Improper Check or Handling of Exceptional Conditions)
-**File**: `generate-report.py`
-**Severity**: LOW (was 2.1) → **RESOLVED**
+## Active Findings (Accepted Residual Risk)
 
-**Original Issue**:
-Error conditions returned error dicts instead of exiting gracefully:
-```python
-# BEFORE (vulnerable)
-except FileNotFoundError:
-    return {"error": "Findings file not found"}
-```
-
-**Remediation Applied** (Lines 21-34):
-- All exceptions now trigger immediate stderr message + sys.exit(1)
-- Prevents error dict propagation through report generation
-- Clear error messaging for debugging
-
-**Code After Fix**:
-```python
-# AFTER (secure)
-@staticmethod
-def load_findings(filepath: str) -> Dict[str, Any]:
-    """Load audit findings from JSON."""
-    try:
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            print(f"Error: Findings file must contain a JSON object, got {type(data).__name__}", file=sys.stderr)
-            sys.exit(1)
-        return data
-    except FileNotFoundError:
-        print(f"Error: Findings file not found: {filepath}", file=sys.stderr)
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in findings file: {e}", file=sys.stderr)
-        sys.exit(1)
-```
-
-**Verification**: ✅ PASS - All error conditions now terminate with appropriate exit codes
+### L1 — Diagnostic Output to stdout (CWE-532)
+**Severity**: LOW
+**File**: `skills/supply-chain-auditor/scripts/generate-sbom.sh`
+**Description**: Project path and package manager name are echoed to stdout during execution. In CI pipelines these messages appear in build logs. No credentials or secrets are involved. Accepted as operational verbosity.
+**Remediation**: Add `--quiet` flag to suppress non-essential output. Low priority.
 
 ---
 
-## INFO Level Findings (NO CHANGE: 2/2)
-
-These items are informational observations, not vulnerabilities:
-
-#### 6. Hardcoded Tool Versions in Scripts
-**Status**: UNCHANGED (acceptable for this context)
-- Tool versions remain hardcoded: CycloneDX 1.4, script version 1.0.0
-- Versions are configuration constants, not security vulnerabilities
-- **Decision**: Not remediated as part of this cycle; tracked for future enhancement
-
-#### 7. No HTTP Security Headers Check (DAST Gap)
-**Status**: UNCHANGED (N/A - tool operates offline)
-- The skill is a local analysis tool without network exposure
-- DAST not applicable by design
+### L2 — Bare Echo JSON in GitLab/Jenkins/Docker Auditors (CWE-78)
+**Severity**: LOW
+**File**: `skills/supply-chain-auditor/scripts/audit-ci-config.sh` (lines ~119, ~130, ~155, ~177, ~183)
+**Description**: The GitLab CI, Jenkins, and Docker auditor branches still use `echo '{"severity": ...}'` for JSON findings. These branches do not interpolate user-controlled filenames (paths are hardcoded strings), so actual injection risk is negligible. However, the inconsistency with the GitHub Actions auditor is a maintenance concern.
+**Remediation**: Migrate to `jq -n` for consistency. Low priority.
 
 ---
 
-## Security Best Practices Assessment (POST-REMEDIATION)
-
-### Strengths
-
-| Practice | Status | Evidence |
-|----------|--------|----------|
-| **Input Validation** | **EXCELLENT** | Comprehensive path validation (lines 9-21) |
-| **Error Handling** | **EXCELLENT** | Explicit error exits with stderr messages |
-| **Shell Safety** | **EXCELLENT** | `set -euo pipefail` consistently applied |
-| **Command Injection Prevention** | **EXCELLENT** | `--` terminators, proper quoting everywhere |
-| **Secret Handling** | **EXCELLENT** | No hardcoded credentials detected |
-| **JSON Output Escaping** | **EXCELLENT** | jq-based safe construction + fallback |
-| **Exception Handling** | **EXCELLENT** | Immediate exit on errors (no silent failures) |
-
-### Remaining Considerations
-
-| Item | Priority | Status | Notes |
-|------|----------|--------|-------|
-| Regex Timeout Protection | LOW | Documented | grep has built-in safeguards |
-| Symlink Following | LOW | Mitigated | Canonical path resolution prevents most attacks |
-| Fuzzing Tests | MEDIUM | Future work | Optional enhancement for CI/CD |
+### INFO-1 — Maven/Gradle SBOM Not Implemented
+**Severity**: INFO
+**File**: `skills/supply-chain-auditor/scripts/generate-sbom.sh` (line ~222)
+**Description**: Maven/Gradle projects cause the script to exit with status 1. This is a documented known gap (`echo "Maven/Gradle support coming soon"`).
+**Remediation**: Implement in a future iteration.
 
 ---
 
-## CWE Mapping Summary (POST-REMEDIATION)
+## DAST Assessment
 
-| CWE ID | CWE Title | Severity | Count | Status |
-|--------|-----------|----------|-------|--------|
-| CWE-78 | Command Injection | MEDIUM | 0 | ✅ RESOLVED |
-| CWE-426 | Untrusted Search Path | MEDIUM | 0 | ✅ RESOLVED |
-| CWE-1333 | Inefficient Regular Expression | LOW | 0 | ✅ MITIGATED |
-| CWE-94 | Code Injection | LOW | 0 | ✅ RESOLVED |
-| CWE-703 | Exception Handling | LOW | 0 | ✅ RESOLVED |
-
-**CWE Total**: 0 active findings (5/5 resolved)
+This project is a CLI/script toolset with no HTTP service or API surface. Standard DAST checks (HTTP headers, CORS, TLS, cookie flags, authentication flows) are not applicable. The CI pipeline (lint.yml) was assessed above for workflow injection vectors; all vectors are now mitigated.
 
 ---
 
-## OWASP Top 10 2021 Mapping (POST-REMEDIATION)
+## Summary Table
 
-| OWASP Category | Findings | Mitigation Status |
-|----------------|----------|------------------|
-| A01: Broken Access Control | 0 (was CWE-426) | ✅ RESOLVED |
-| A03: Injection | 0 (was CWE-78, CWE-94) | ✅ RESOLVED |
-| A04: Insecure Design | 0 (was CWE-1333) | ✅ MITIGATED |
-| All Other Categories | 0 | PASS |
-
----
-
-## NIST SP 800-53 Control Alignment (POST-REMEDIATION)
-
-| Control | Title | Status | Evidence |
-|---------|-------|--------|----------|
-| AC-3 | Access Control - Least Privilege | **GOOD** | Path validation + read-only operations |
-| SI-10 | Error Handling & Monitoring | **EXCELLENT** | Proper exception handling |
-| SI-11 | Error Handling | **EXCELLENT** | stderr logging + sys.exit(1) |
-| SC-7 | Boundary Protection | **EXCELLENT** | Local file-only operations |
-| CM-5 | Code Configuration Control | **GOOD** | Version control ready |
-
----
-
-## Remediation Summary
-
-### Effort Breakdown
-- **CWE-78 Fix**: 0.5 person-hours (add `--` separators)
-- **CWE-426 Fix**: 2 person-hours (comprehensive path validation)
-- **CWE-94 Fix**: 1.5 person-hours (jq-based JSON generation)
-- **CWE-703 Fix**: 0.5 person-hours (error handling improvements)
-- **Testing & Verification**: 2 person-hours
-- **Total Actual Time**: 6.5 person-hours (vs 16 estimated)
-
-### Changes Made
-- **Files Modified**: 4 scripts (3 shell, 1 Python)
-- **Lines Added**: ~45 lines (validation, escaping, error handling)
-- **Lines Removed**: ~8 lines (simplified error paths)
-- **Net Code Change**: +37 lines (8% increase in robustness)
-
-### Deployment Notes
-- All fixes maintain backward compatibility
-- No API changes to scripts
-- No new dependencies introduced
-- Ready for immediate production use
-
----
-
-## Conclusion
-
-The Supply Chain Security Auditor skill has achieved **EXCELLENT security posture** through comprehensive remediation of all identified findings. The post-fix assessment shows:
-
-✅ **ZERO CRITICAL or HIGH severity vulnerabilities**
-✅ **ALL 5 CWE findings RESOLVED or MITIGATED**
-✅ **Security Score Improvement: 8.2 → 9.4/10 (+1.2 points)**
-✅ **Enhanced defensive programming practices**
-✅ **Production-ready security controls**
-
-The skill now exemplifies supply chain security best practices and is suitable for auditing real-world projects without security reservations.
-
----
-
-## Audit Metadata
-
-| Field | Value |
-|-------|-------|
-| Audit Phase | POST-REMEDIATION (Cycle 2) |
-| Baseline Score | 8.2/10 |
-| Current Score | 9.4/10 |
-| CWEs Resolved | 5/5 (100%) |
-| Time to Remediation | 6.5 person-hours |
-| Files Analyzed | 7 (5 scripts + 2 reference docs) |
-| Lines of Code | ~3,000 |
-| Confidence Level | HIGH |
-| Recommended Action | **APPROVE FOR DEPLOYMENT** |
-
-**Audit Certification**: This skill is **SECURITY COMPLIANT** and ready for production use in auditing supply chains.
+| ID | Severity | CWE | Status | File |
+|----|----------|-----|--------|------|
+| H1 | HIGH | CWE-829 | RESOLVED | lint.yml |
+| H2 | HIGH | CWE-269 | RESOLVED | lint.yml |
+| M1 | MEDIUM | CWE-78 | RESOLVED | generate-sbom.sh |
+| M2 | MEDIUM | CWE-78 | RESOLVED | audit-ci-config.sh |
+| M3 | MEDIUM | CWE-697 | RESOLVED | audit-ci-config.sh |
+| M4 | MEDIUM | CWE-20 | RESOLVED | audit-ci-config.sh |
+| L1 | LOW | CWE-532 | ACCEPTED | generate-sbom.sh |
+| L2 | LOW | CWE-78 | ACCEPTED | audit-ci-config.sh |
+| I1 | INFO | N/A | KNOWN GAP | generate-sbom.sh |
