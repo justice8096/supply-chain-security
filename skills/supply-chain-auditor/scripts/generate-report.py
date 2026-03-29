@@ -8,7 +8,8 @@ import json
 import sys
 import argparse
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, Any
+
 
 class AuditReport:
     def __init__(self, findings_file: str):
@@ -85,9 +86,9 @@ class AuditReport:
 
         # SLSA estimate
         slsa_level = self._estimate_slsa_level()
-        lines.append(f"\n### SLSA Baseline Level")
+        lines.append("\n### SLSA Baseline Level")
         lines.append(f"- **Estimated Current Level**: L{slsa_level}")
-        lines.append(f"- **Recommended Target**: L3 (minimum for production)")
+        lines.append("- **Recommended Target**: L3 (minimum for production)")
 
         return "\n".join(lines)
 
@@ -157,7 +158,7 @@ class AuditReport:
         lines.append("")
 
         if slsa_level < 3:
-            lines.append(f"**Gap Analysis to L3**:")
+            lines.append("**Gap Analysis to L3**:")
             lines.append("- [ ] Implement signed provenance (cosign/Sigstore)")
             lines.append("- [ ] Enforce branch protection (no force-push)")
             lines.append("- [ ] Pin all dependencies (package-lock.json, go.sum, Cargo.lock)")
@@ -240,6 +241,7 @@ class AuditReport:
         else:
             return 3
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate supply chain audit report from findings JSON"
@@ -272,6 +274,7 @@ def main():
     except Exception as e:
         print(f"Error generating report: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
