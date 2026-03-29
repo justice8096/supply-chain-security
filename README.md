@@ -1,5 +1,8 @@
 # Supply Chain Security Auditor
 
+![Lint](https://github.com/justice8096/supply-chain-security/actions/workflows/lint.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/justice8096/supply-chain-security)
+
 A comprehensive Claude Code skill for auditing software projects against supply chain security threats, including dependency analysis, CI/CD pipeline validation, and SBOM generation with framework compliance mapping (NIST SP 800-218A, EU AI Act, OpenSSF, CISA).
 
 ## Features
