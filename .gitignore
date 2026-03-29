@@ -26,9 +26,3 @@ audit-findings.json
 .idea/
 *.iml
 
-# Runtime dependencies lockfiles (for testing)
-package-lock.json
-yarn.lock
-Pipfile.lock
-poetry.lock
-Cargo.lock

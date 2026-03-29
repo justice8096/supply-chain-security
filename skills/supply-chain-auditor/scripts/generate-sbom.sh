@@ -114,30 +114,25 @@ generate_python_sbom() {
         name=$(grep '^name' "$project/pyproject.toml" | head -1 | cut -d'"' -f2 || echo "python-project")
     fi
 
-    cat > "$output" <<EOF
-{
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.4",
-  "version": 1,
-  "metadata": {
-    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "tools": [
-      {
-        "vendor": "supply-chain-auditor",
-        "name": "generate-sbom.sh",
-        "version": "1.0.0"
-      }
-    ],
-    "component": {
-      "type": "application",
-      "name": "$name",
-      "version": "0.0.0"
-    }
-  },
-  "components": [],
-  "dependencies": []
-}
-EOF
+    local timestamp
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # CWE-78/116: Use jq to safely construct JSON with proper escaping
+    jq -n \
+      --arg name "$name" \
+      --arg ts "$timestamp" \
+      '{
+        bomFormat: "CycloneDX",
+        specVersion: "1.4",
+        version: 1,
+        metadata: {
+          timestamp: $ts,
+          tools: [{vendor: "supply-chain-auditor", name: "generate-sbom.sh", version: "1.0.0"}],
+          component: {type: "application", name: $name, version: "0.0.0"}
+        },
+        components: [],
+        dependencies: []
+      }' > "$output"
 
     echo "SBOM generated: $output"
 }
@@ -148,33 +143,28 @@ generate_rust_sbom() {
 
     echo "Detecting Rust dependencies from $project/Cargo.lock..."
 
-    local name=$(grep -A1 'name = ' "$project/Cargo.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "rust-project")
-    local version=$(grep -A1 'version = ' "$project/Cargo.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "0.0.0")
+    local name version timestamp
+    name=$(grep -A1 'name = ' "$project/Cargo.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "rust-project")
+    version=$(grep -A1 'version = ' "$project/Cargo.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "0.0.0")
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-    cat > "$output" <<EOF
-{
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.4",
-  "version": 1,
-  "metadata": {
-    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "tools": [
-      {
-        "vendor": "supply-chain-auditor",
-        "name": "generate-sbom.sh",
-        "version": "1.0.0"
-      }
-    ],
-    "component": {
-      "type": "application",
-      "name": "$name",
-      "version": "$version"
-    }
-  },
-  "components": [],
-  "dependencies": []
-}
-EOF
+    # CWE-78/116: Use jq to safely construct JSON with proper escaping
+    jq -n \
+      --arg name "$name" \
+      --arg version "$version" \
+      --arg ts "$timestamp" \
+      '{
+        bomFormat: "CycloneDX",
+        specVersion: "1.4",
+        version: 1,
+        metadata: {
+          timestamp: $ts,
+          tools: [{vendor: "supply-chain-auditor", name: "generate-sbom.sh", version: "1.0.0"}],
+          component: {type: "application", name: $name, version: $version}
+        },
+        components: [],
+        dependencies: []
+      }' > "$output"
 
     echo "SBOM generated: $output"
 }
@@ -185,32 +175,26 @@ generate_go_sbom() {
 
     echo "Detecting Go dependencies from $project/go.mod..."
 
-    local name=$(grep '^module' "$project/go.mod" 2>/dev/null | awk '{print $2}' || echo "go-project")
+    local name timestamp
+    name=$(grep '^module' "$project/go.mod" 2>/dev/null | awk '{print $2}' || echo "go-project")
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-    cat > "$output" <<EOF
-{
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.4",
-  "version": 1,
-  "metadata": {
-    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "tools": [
-      {
-        "vendor": "supply-chain-auditor",
-        "name": "generate-sbom.sh",
-        "version": "1.0.0"
-      }
-    ],
-    "component": {
-      "type": "application",
-      "name": "$name",
-      "version": "0.0.0"
-    }
-  },
-  "components": [],
-  "dependencies": []
-}
-EOF
+    # CWE-78/116: Use jq to safely construct JSON with proper escaping
+    jq -n \
+      --arg name "$name" \
+      --arg ts "$timestamp" \
+      '{
+        bomFormat: "CycloneDX",
+        specVersion: "1.4",
+        version: 1,
+        metadata: {
+          timestamp: $ts,
+          tools: [{vendor: "supply-chain-auditor", name: "generate-sbom.sh", version: "1.0.0"}],
+          component: {type: "application", name: $name, version: "0.0.0"}
+        },
+        components: [],
+        dependencies: []
+      }' > "$output"
 
     echo "SBOM generated: $output"
 }

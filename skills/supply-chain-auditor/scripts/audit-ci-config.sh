@@ -43,19 +43,28 @@ audit_github_actions() {
         # Check for unpinned actions
         if grep -q 'uses: .*@v[0-9]' "$workflow_file"; then
             echo "    CRITICAL: Unpinned action found (uses @v1 or @v2 instead of @commit)"
-            echo "{\"severity\": \"critical\", \"finding\": \"unpinned-action\", \"file\": \"$workflow_name\", \"description\": \"Action version not pinned to commit hash\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "critical", "finding": "unpinned-action", "file": $file, "description": "Action version not pinned to commit hash"}' \
+              >> "$FINDINGS_FILE"
         fi
 
         # Check for unpinned action references
         if grep -q 'uses: [^@]*$' "$workflow_file"; then
             echo "    HIGH: Action without version specified"
-            echo "{\"severity\": \"high\", \"finding\": \"missing-action-version\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "high", "finding": "missing-action-version", "file": $file}' \
+              >> "$FINDINGS_FILE"
         fi
 
         # CWE-78: Add -- option terminator to grep patterns
         if grep -E -- '(GITHUB_TOKEN|API_KEY|password|secret|key)\s*=\s*['\''\"A-Za-z0-9]' "$workflow_file"; then
             echo "    CRITICAL: Potential hardcoded secret detected"
-            echo "{\"severity\": \"critical\", \"finding\": \"hardcoded-secret\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "critical", "finding": "hardcoded-secret", "file": $file}' \
+              >> "$FINDINGS_FILE"
         fi
 
         # Check for secrets exposure in logs
@@ -66,19 +75,29 @@ audit_github_actions() {
         # Check for pull_request_target without restrictions
         if grep -q 'pull_request_target' "$workflow_file" && ! grep -q 'if.*pull_request.*approved' "$workflow_file"; then
             echo "    HIGH: pull_request_target without approval restriction"
-            echo "{\"severity\": \"high\", \"finding\": \"dangerous-workflow\", \"file\": \"$workflow_name\", \"description\": \"pull_request_target can execute untrusted code\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "high", "finding": "dangerous-workflow", "file": $file, "description": "pull_request_target can execute untrusted code"}' \
+              >> "$FINDINGS_FILE"
         fi
 
         # Check for excessive permissions
-        if grep -A5 'permissions:' "$workflow_file" | grep -q 'write: all'; then
+        # CWE-697: GitHub Actions uses write-all (not "write: all") for permissions
+        if grep -A5 'permissions:' "$workflow_file" | grep -qE 'write-all$|permissions:\s+write-all'; then
             echo "    HIGH: Excessive write permissions granted"
-            echo "{\"severity\": \"high\", \"finding\": \"excessive-permissions\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "high", "finding": "excessive-permissions", "file": $file}' \
+              >> "$FINDINGS_FILE"
         fi
 
         # Check for secrets() access
         if grep -q 'secrets\.\*' "$workflow_file"; then
             echo "    MEDIUM: Accessing all secrets with wildcard"
-            echo "{\"severity\": \"medium\", \"finding\": \"wildcard-secrets\", \"file\": \"$workflow_name\"}" >> "$FINDINGS_FILE"
+            # CWE-78/116: Use jq to safely construct JSON with proper escaping
+            jq -n --arg file "$workflow_name" \
+              '{"severity": "medium", "finding": "wildcard-secrets", "file": $file}' \
+              >> "$FINDINGS_FILE"
         fi
     done
 }
@@ -180,7 +199,9 @@ generate_summary() {
     echo "CI/CD Audit Summary"
     echo "=================="
 
-    local total_findings=$(wc -l < "$FINDINGS_FILE")
+    # CWE-20: wc -l outputs leading spaces on macOS; use grep -c for portability
+    local total_findings
+    total_findings=$(grep -c '' "$FINDINGS_FILE" 2>/dev/null || echo 0)
     if [ "$total_findings" -eq 0 ]; then
         echo "No findings detected"
         return 0
