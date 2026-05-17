@@ -5,16 +5,117 @@ Usage: python generate-report.py findings.json --output report.md
 """
 
 import json
+import os
 import sys
 import argparse
-from datetime import datetime
-from typing import Dict, Any
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+
+# Hard-coded framework versions — single source of truth in the codebase, bumped
+# when the skill version bumps. Audits emitted by this version of the script
+# certify against THESE framework versions and no others. See CHANGELOG.md for
+# what changed when bumping.
+FRAMEWORK_VERSIONS = (
+    "NIST SP 800-218A (2024-02), "
+    "EU AI Act Art. 25 (Reg. (EU) 2024/1689), "
+    "OpenSSF Scorecard v5.0 (2024-10), "
+    "CISA SSDF Attestation Form (2024-03), "
+    "ISO/IEC 42001:2023, "
+    "ENISA NIS2 Technical Implementation Guidance (2024), "
+    "SLSA v1.0 (2023-04)"
+)
+SOURCES_CURRENT_AS_OF_DEFAULT = "2026-05"
+CHANGELOG_URL = "https://github.com/justice8096/supply-chain-security/blob/master/CHANGELOG.md"
+
+
+def _git(args: list, cwd: Optional[str] = None) -> Optional[str]:
+    """Run a git command and return stripped stdout, or None on failure."""
+    try:
+        result = subprocess.run(
+            ["git"] + args,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _detect_skill_version() -> str:
+    """Read version from .claude-plugin/plugin.json relative to this script."""
+    script_dir = Path(__file__).resolve().parent  # .../skills/supply-chain-auditor/scripts/
+    # Walk up looking for .claude-plugin/plugin.json
+    for parent in [script_dir.parent.parent.parent, script_dir.parent.parent, script_dir.parent]:
+        plugin_json = parent / ".claude-plugin" / "plugin.json"
+        if plugin_json.exists():
+            try:
+                with open(plugin_json, encoding="utf-8") as f:
+                    return json.load(f).get("version", "unknown")
+            except (json.JSONDecodeError, OSError):
+                continue
+    return "unknown"
+
+
+def _detect_skill_commit() -> str:
+    """git rev-parse --short HEAD inside the skill repo (script's own repo)."""
+    script_dir = str(Path(__file__).resolve().parent)
+    return _git(["rev-parse", "--short", "HEAD"], cwd=script_dir) or "unknown"
+
+
+def _detect_target_repo(cwd: str) -> str:
+    """Repo name from remote.origin.url, falling back to cwd basename."""
+    url = _git(["config", "--get", "remote.origin.url"], cwd=cwd)
+    if url:
+        # Strip .git suffix, take last path segment
+        name = url.rstrip("/").rsplit("/", 1)[-1]
+        if name.endswith(".git"):
+            name = name[:-4]
+        return name
+    return Path(cwd).name
+
+
+def _detect_target_commit(cwd: str) -> str:
+    return _git(["rev-parse", "--short", "HEAD"], cwd=cwd) or "unknown"
+
+
+def _detect_target_branch(cwd: str) -> str:
+    return _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd) or "unknown"
 
 
 class AuditReport:
-    def __init__(self, findings_file: str):
+    def __init__(
+        self,
+        findings_file: str,
+        skill_version: Optional[str] = None,
+        skill_commit: Optional[str] = None,
+        target_repo: Optional[str] = None,
+        target_commit: Optional[str] = None,
+        target_branch: Optional[str] = None,
+        sources_current_as_of: Optional[str] = None,
+    ):
         self.findings = self.load_findings(findings_file)
-        self.timestamp = datetime.utcnow().isoformat() + "Z"
+        self.timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Skill identity — detected from this script's repo unless overridden.
+        self.skill_version = skill_version or _detect_skill_version()
+        self.skill_commit = skill_commit or _detect_skill_commit()
+
+        # Target project identity — detected from cwd unless overridden.
+        cwd = os.getcwd()
+        self.target_repo = target_repo or _detect_target_repo(cwd)
+        self.target_commit = target_commit or _detect_target_commit(cwd)
+        self.target_branch = target_branch or _detect_target_branch(cwd)
+
+        # Source currency — caller can override (e.g. for re-audits citing a frozen date).
+        self.sources_current_as_of = sources_current_as_of or SOURCES_CURRENT_AS_OF_DEFAULT
 
     @staticmethod
     def load_findings(filepath: str) -> Dict[str, Any]:
@@ -38,7 +139,8 @@ class AuditReport:
         """Generate markdown report."""
         report = []
         report.append("# Supply Chain Security Audit Report")
-        report.append(f"\n**Generated**: {self.timestamp}")
+        report.append("")
+        report.append(self._provenance_block())
         report.append("")
 
         report.append("## Executive Summary")
@@ -60,6 +162,28 @@ class AuditReport:
         report.append(self._remediation_roadmap())
 
         return "\n".join(report)
+
+    def _provenance_block(self) -> str:
+        """Generate the required Provenance Block per the Skill Versioning and
+        Addendum Framework. Every supply-chain-audit.md report must start with
+        this — it's the linchpin that lets prior audits be identified for
+        addendum filings when framework versions change."""
+        lines = []
+        lines.append("## Provenance Block")
+        lines.append("")
+        lines.append(f"- **Generated**: {self.timestamp}")
+        lines.append(f"- **Generated by**: supply-chain-security v{self.skill_version} (`{self.skill_commit}`)")
+        lines.append(
+            f"- **Target project**: {self.target_repo} @ `{self.target_commit}` "
+            f"on branch `{self.target_branch}`"
+        )
+        lines.append(
+            f"- **Sources current as of**: {self.sources_current_as_of} "
+            f"(except where individual findings note otherwise)"
+        )
+        lines.append(f"- **Framework versions**: {FRAMEWORK_VERSIONS}")
+        lines.append(f"- **Skill changelog**: {CHANGELOG_URL}")
+        return "\n".join(lines)
 
     def _summary_section(self) -> str:
         """Generate executive summary."""
@@ -244,7 +368,9 @@ class AuditReport:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate supply chain audit report from findings JSON"
+        description="Generate supply chain audit report from findings JSON. "
+        "Emits a Provenance Block at the top of every report per the Skill "
+        "Versioning and Addendum Framework."
     )
     parser.add_argument("findings_file", help="Path to findings JSON file")
     parser.add_argument(
@@ -258,14 +384,50 @@ def main():
         choices=["markdown", "json"],
         help="Output format"
     )
+    # Provenance Block inputs — all optional, auto-detected from git/plugin.json
+    # if not provided. Required for legal-grade audit reproducibility.
+    parser.add_argument(
+        "--skill-version",
+        help="Override detected skill version (default: read .claude-plugin/plugin.json)"
+    )
+    parser.add_argument(
+        "--skill-commit",
+        help="Override detected skill commit (default: git rev-parse on skill repo)"
+    )
+    parser.add_argument(
+        "--target-repo",
+        help="Target project repo name (default: detected from cwd git remote/basename)"
+    )
+    parser.add_argument(
+        "--target-commit",
+        help="Target project commit (default: cwd git rev-parse --short HEAD)"
+    )
+    parser.add_argument(
+        "--target-branch",
+        help="Target project branch (default: cwd git current branch)"
+    )
+    parser.add_argument(
+        "--sources-current-as-of",
+        help="Override sources-current-as-of date (YYYY-MM); default: " + SOURCES_CURRENT_AS_OF_DEFAULT
+    )
 
     args = parser.parse_args()
 
     try:
-        report = AuditReport(args.findings_file)
+        report = AuditReport(
+            args.findings_file,
+            skill_version=args.skill_version,
+            skill_commit=args.skill_commit,
+            target_repo=args.target_repo,
+            target_commit=args.target_commit,
+            target_branch=args.target_branch,
+            sources_current_as_of=args.sources_current_as_of,
+        )
         content = report.generate_markdown()
 
-        with open(args.output, 'w') as f:
+        # Force utf-8 — report content may contain checkmarks, em-dashes, and other non-ASCII.
+        # Without this, Python on Windows uses cp1252 by default and raises UnicodeEncodeError.
+        with open(args.output, 'w', encoding='utf-8', newline='\n') as f:
             f.write(content)
 
         print(f"Report generated: {args.output}")
