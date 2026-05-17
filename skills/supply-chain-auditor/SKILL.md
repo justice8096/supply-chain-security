@@ -215,6 +215,9 @@ implementation guide.
 Use `scripts/generate-report.py findings.json --output report.md` to transform a
 structured findings JSON file into a complete markdown report containing:
 
+- **Provenance Block** (required): skill version + commit hash + generation date +
+  target-project repo + commit + sources-current-as-of + framework versions +
+  changelog URL. See the [Skill Versioning and Addendum Framework](https://github.com/justice8096/SecondBrainData/blob/main/SoftwarePractices/Skill-Versioning-and-Addendum-Framework.md) for the full template; example format under "Audit-artifact provenance" in `CHANGELOG.md`. This is the linchpin that keeps prior audits identifiable for addendum filings when frameworks update.
 - **Executive summary**: risk overview, top 3 findings, SLSA level, compliance status.
 - **Risk matrix**: severity × likelihood grid with affected components.
 - **SBOM**: CycloneDX JSON with VEX statements.
@@ -226,6 +229,8 @@ structured findings JSON file into a complete markdown report containing:
 ---
 
 ## Framework Mapping Summary
+
+> *Sources current as of 2026-05. Authority-version pins (record these in every report's Provenance Block):* NIST SP 800-218A (Secure Software Development Framework, 2024-02); EU AI Act (Regulation (EU) 2024/1689) Article 25 — cybersecurity requirements for high-risk AI systems (in force 2024-08-01, full applicability 2026-08-02); OpenSSF Scorecard v5.0 (2024-10); CISA Secure Software Development Attestation Form (2024-03); ISO/IEC 42001:2023; ENISA NIS2 Technical Implementation Guidance (2024); SLSA v1.0 (2023-04). Verify currency of each cited control before signing off on legal-grade audits.
 
 All findings are tagged to one or more of the following controls.
 See `references/framework-mapping.md` for the full mapping table.
