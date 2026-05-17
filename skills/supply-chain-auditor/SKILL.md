@@ -6,7 +6,7 @@ description: >
   assess SLSA compliance, audit CI/CD pipeline configuration for supply chain risks,
   scan container images for supply chain threats, check license compliance, detect
   hardcoded secrets in CI configuration, or map findings to NIST SP 800-218A, EU AI Act,
-  OpenSSF Scorecard, CISA secure development controls, ISO 42001, ENISA 2025, or SLSA v1.0.
+  OpenSSF Scorecard, CISA secure development controls, ISO 42001, ENISA NIS2 Technical Implementation Guidance (2024), or SLSA v1.0.
   Trigger phrases include: "supply chain", "SBOM", "dependency audit", "are my dependencies
   safe", "license check", "SLSA", "software bill of materials", "check my package.json",
   "vulnerability scan", "is this library safe", "dependency risk", "container security",
@@ -18,7 +18,7 @@ description: >
 Audit software projects across five dimensions: dependency analysis, CI/CD pipeline security,
 SBOM generation, SLSA compliance assessment, and container/runtime supply chain analysis.
 All findings map to NIST SP 800-218A, EU AI Act Article 25, OpenSSF Scorecard, CISA secure
-development controls, ISO 42001, ENISA 2025, and SLSA v1.0.
+development controls, ISO 42001, ENISA NIS2 Technical Implementation Guidance (2024), and SLSA v1.0.
 
 ---
 
@@ -242,7 +242,7 @@ See `references/framework-mapping.md` for the full mapping table.
 | OpenSSF Scorecard | 20 security practice metrics |
 | CISA Secure Software Development | 8 critical controls |
 | ISO 42001 | Design controls, risk assessment, AI management system |
-| ENISA 2025 | Supply chain risk, vendor security, incident response |
+| ENISA NIS2 Technical Implementation Guidance (2024) | Supply chain risk, vendor security, incident response |
 | SLSA v1.0 | Provenance, source integrity, build integrity, packaging integrity |
 
 ---
